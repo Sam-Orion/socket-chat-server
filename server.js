@@ -17,6 +17,21 @@ function isUsernameTaken(username) {
 }
 
 /**
+ * Finds a client's socket by their username (case-insensitive).
+ * @param {string} username - The username to search for.
+ * @returns {net.Socket | null} The socket, or null if not found.
+ */
+function getSocketByUsername(username) {
+  const targetUsername = username.toLowerCase();
+  for (const [socket, name] of clients.entries()) {
+    if (name.toLowerCase() === targetUsername) {
+      return socket;
+    }
+  }
+  return null;
+}
+
+/**
  * Broadcasts a message to all connected clients, except the (optional) sender.
  * @param {string} message - The message to broadcast.
  * @param {net.Socket} [senderSocket=null] - The socket of the client who sent the message (optional).
@@ -37,20 +52,42 @@ const server = net.createServer((socket) => {
 
   socket.on("data", (data) => {
     const message = data.trim();
-
     if (!message) return;
 
-    console.log(`Received data: ${message}`);
+    console.log(
+      `Received data from ${clients.get(socket) || "new client"}: ${message}`,
+    );
 
     if (clients.has(socket)) {
       const username = clients.get(socket);
 
       if (message.startsWith("MSG ")) {
         const text = message.substring(4).trim();
-
         if (text) {
           const broadcastMessage = `MSG ${username} ${text}`;
           broadcast(broadcastMessage, socket);
+        }
+      } else if (message === "PING") {
+        socket.write("PONG\n");
+      } else if (message === "WHO") {
+        for (const name of clients.values()) {
+          socket.write(`USER ${name}\n`);
+        }
+      } else if (message.startsWith("DM ")) {
+        const parts = message.split(" ");
+        const targetUsername = parts[1];
+        const text = parts.slice(2).join(" ").trim();
+
+        if (targetUsername && text) {
+          const targetSocket = getSocketByUsername(targetUsername);
+          if (targetSocket) {
+            targetSocket.write(`DM ${username} ${text}\n`);
+            socket.write(`OK DM ${targetUsername} ${text}\n`);
+          } else {
+            socket.write(`ERR user-not-found ${targetUsername}\n`);
+          }
+        } else {
+          socket.write("ERR invalid DM format. Use: DM <username> <text>\n");
         }
       } else if (message.startsWith("LOGIN ")) {
         socket.write("ERR already logged in\n");
@@ -60,12 +97,10 @@ const server = net.createServer((socket) => {
     } else {
       if (message.startsWith("LOGIN ")) {
         const username = message.split(" ")[1];
-
         if (!username) {
           socket.write("ERR invalid username\n");
           return;
         }
-
         if (isUsernameTaken(username)) {
           socket.write("ERR username-taken\n");
         } else {
