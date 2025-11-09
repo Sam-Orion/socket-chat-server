@@ -14,11 +14,11 @@ function isUsernameTaken(username) {
 }
 
 /**
- * Broadcasts a message to all connected clients, except the sender.
+ * Broadcasts a message to all connected clients, except the (optional) sender.
  * @param {string} message - The message to broadcast.
- * @param {net.Socket} senderSocket - The socket of the client who sent the message.
+ * @param {net.Socket} [senderSocket=null] - The socket of the client who sent the message (optional).
  */
-function broadcast(message, senderSocket) {
+function broadcast(message, senderSocket = null) {
   console.log(`Broadcasting: ${message}`);
   for (const clientSocket of clients.keys()) {
     if (clientSocket !== senderSocket) {
@@ -34,6 +34,9 @@ const server = net.createServer((socket) => {
 
   socket.on("data", (data) => {
     const message = data.trim();
+
+    if (!message) return;
+
     console.log(`Received data: ${message}`);
 
     if (clients.has(socket)) {
@@ -65,6 +68,7 @@ const server = net.createServer((socket) => {
           clients.set(socket, username);
           socket.write("OK\n");
           console.log(`User ${username} logged in.`);
+          broadcast(`INFO ${username} joined`, socket);
         }
       } else {
         socket.write("ERR please log in first using: LOGIN <username>\n");
@@ -77,6 +81,7 @@ const server = net.createServer((socket) => {
       const username = clients.get(socket);
       clients.delete(socket);
       console.log(`User ${username} disconnected.`);
+      broadcast(`INFO ${username} disconnected`, socket);
     } else {
       console.log("Client disconnected (was not logged in).");
     }
@@ -88,6 +93,7 @@ const server = net.createServer((socket) => {
       const username = clients.get(socket);
       clients.delete(socket);
       console.log(`User ${username} dropped due to error.`);
+      broadcast(`INFO ${username} disconnected`, socket);
     }
   });
 });
