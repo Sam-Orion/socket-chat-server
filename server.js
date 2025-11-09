@@ -6,11 +6,25 @@ const clients = new Map();
 
 function isUsernameTaken(username) {
   for (const name of clients.values()) {
-    if (name === username) {
+    if (name.toLowerCase() === username.toLowerCase()) {
       return true;
     }
   }
   return false;
+}
+
+/**
+ * Broadcasts a message to all connected clients, except the sender.
+ * @param {string} message - The message to broadcast.
+ * @param {net.Socket} senderSocket - The socket of the client who sent the message.
+ */
+function broadcast(message, senderSocket) {
+  console.log(`Broadcasting: ${message}`);
+  for (const clientSocket of clients.keys()) {
+    if (clientSocket !== senderSocket) {
+      clientSocket.write(message + "\n");
+    }
+  }
 }
 
 const server = net.createServer((socket) => {
@@ -23,7 +37,19 @@ const server = net.createServer((socket) => {
     console.log(`Received data: ${message}`);
 
     if (clients.has(socket)) {
-      console.log(`Message from ${clients.get(socket)}: ${message}`);
+      const username = clients.get(socket);
+
+      if (message.startsWith("MSG ")) {
+        const text = message.substring(4).trim();
+        if (text) {
+          const broadcastMessage = `MSG ${username} ${text}`;
+          broadcast(broadcastMessage, socket);
+        }
+      } else if (message.startsWith("LOGIN ")) {
+        socket.write("ERR already logged in\n");
+      } else {
+        socket.write("ERR unknown command\n");
+      }
     } else {
       if (message.startsWith("LOGIN ")) {
         const username = message.split(" ")[1];
