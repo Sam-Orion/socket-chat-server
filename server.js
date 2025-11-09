@@ -1,6 +1,9 @@
 const net = require("net");
 
-const PORT = 4000;
+const PORT =
+  process.env.PORT ||
+  (process.argv[2] && parseInt(process.argv[2], 10)) ||
+  4000;
 
 const clients = new Map();
 
@@ -44,6 +47,7 @@ const server = net.createServer((socket) => {
 
       if (message.startsWith("MSG ")) {
         const text = message.substring(4).trim();
+
         if (text) {
           const broadcastMessage = `MSG ${username} ${text}`;
           broadcast(broadcastMessage, socket);
